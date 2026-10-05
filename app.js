@@ -50,19 +50,11 @@
       h("span", { class: "nm" }, r.title));
   }
 
-  function setTitle(t) { document.title = t ? t + " | " + SITE.name : "수행 레퍼런스 | " + SITE.name; }
+  function setTitle(t) { document.title = t ? t + " | " + SITE.name : SITE.name; }
 
-  function renderList() {
-    setTitle("");
-    app.textContent = "";
+  /* ---------- 홈: 소개 → 레퍼런스 → 주요사업 ---------- */
 
-    var years = REFS.map(function (r) { return r.year; });
-    var minY = Math.min.apply(null, years), maxY = Math.max.apply(null, years);
-    var clients = {};
-    REFS.forEach(function (r) {
-      r.meta.forEach(function (m) { if (m[0] === "발주처") clients[m[1]] = 1; });
-    });
-
+  function heroSec() {
     var lines = String(SITE.headline || "").split("\n");
     var h1 = h("h1", {});
     lines.forEach(function (ln, i) {
@@ -70,32 +62,56 @@
       if (i === lines.length - 1 && lines.length > 1) h1.appendChild(h("em", {}, ln));
       else h1.appendChild(document.createTextNode(ln));
     });
-
-    app.appendChild(h("section", { class: "hero" },
+    return h("section", { class: "hero" },
+      h("p", { class: "eyebrow" }, SITE.name),
       h1,
-      h("p", {}, SITE.sub),
+      h("p", { class: "sub" }, SITE.sub)
+    );
+  }
+
+  function aboutSec() {
+    var years = REFS.map(function (r) { return r.year; });
+    var clients = {};
+    REFS.forEach(function (r) { r.meta.forEach(function (m) { if (m[0] === "발주처") clients[m[1]] = 1; }); });
+
+    var paras = (SITE.about || []).map(function (t) { return h("p", { class: "lead" }, t); });
+
+    var facts = null;
+    if (SITE.facts && SITE.facts.length) {
+      facts = h("dl", { class: "dl" });
+      SITE.facts.forEach(function (f) { facts.appendChild(h("div", {}, h("dt", {}, f[0]), h("dd", {}, f[1]))); });
+    }
+
+    return h("section", { id: "about", class: "sec-block" },
+      h("h2", { class: "kick" }, "기업 소개"),
+      paras,
+      facts,
       h("div", { class: "stats" },
         h("div", { class: "stat" }, h("b", {}, String(REFS.length)), h("span", {}, "수행 레퍼런스")),
-        h("div", { class: "stat" }, h("b", {}, minY + "–" + String(maxY).slice(2)), h("span", {}, "수행 기간")),
+        h("div", { class: "stat" }, h("b", {}, Math.min.apply(null, years) + "–" + String(Math.max.apply(null, years)).slice(2)), h("span", {}, "수행 기간")),
         h("div", { class: "stat" }, h("b", {}, String(Object.keys(clients).length)), h("span", {}, "발주처"))
       )
-    ));
+    );
+  }
 
-    var yearList = ["all"].concat(Array.from(new Set(years)).sort(function (a, b) { return b - a; }));
+  function worksSec() {
+    var years = Array.from(new Set(REFS.map(function (r) { return r.year; }))).sort(function (a, b) { return b - a; });
     var chips = h("div", { class: "filters", role: "group", "aria-label": "연도 필터" });
-    yearList.forEach(function (y) {
+    ["all"].concat(years).forEach(function (y) {
       chips.appendChild(h("button", {
         class: "chip", type: "button",
         "aria-pressed": String(String(y) === String(activeYear)),
-        onclick: function () { activeYear = y; renderList(); }
+        onclick: function () {
+          activeYear = y;
+          var old = document.getElementById("works");
+          if (old) old.replaceWith(worksSec());
+        }
       }, y === "all" ? "전체" : String(y)));
     });
-    app.appendChild(chips);
 
     var shown = REFS.filter(function (r) { return activeYear === "all" || String(r.year) === String(activeYear); });
     var grid = h("div", { class: "grid" });
     shown.forEach(function (r) {
-      var when = (r.meta.filter(function (m) { return m[0] === "일시"; })[0] || [0, String(r.year)])[1];
       grid.appendChild(h("a", { class: "card", href: "#/r/" + r.slug },
         poster(r, false),
         h("div", { class: "cap" },
@@ -104,9 +120,44 @@
         )
       ));
     });
-    app.appendChild(shown.length ? grid : h("p", { class: "empty" }, "표시할 레퍼런스가 없습니다."));
-    window.scrollTo(0, 0);
+
+    return h("section", { id: "works", class: "sec-block" },
+      h("h2", { class: "kick" }, "레퍼런스"),
+      h("p", { class: "lead sm" }, "지금까지 수행한 시장·상권·축제 사업입니다."),
+      chips,
+      shown.length ? grid : h("p", { class: "empty" }, "표시할 레퍼런스가 없습니다.")
+    );
   }
+
+  function businessSec() {
+    var list = h("div", { class: "biz" });
+    (SITE.business || []).forEach(function (b, i) {
+      var n = b.tag ? REFS.filter(function (r) { return r.tag === b.tag; }).length : 0;
+      list.appendChild(h("div", { class: "biz-item" },
+        h("span", { class: "biz-no" }, String(i + 1).padStart(2, "0")),
+        h("h3", {}, b.title),
+        h("p", {}, b.desc),
+        n ? h("a", { class: "biz-link", href: "#/works" }, "레퍼런스 " + n + "건 보기 →") : null
+      ));
+    });
+    return h("section", { id: "business", class: "sec-block" },
+      h("h2", { class: "kick" }, "주요사업"),
+      list
+    );
+  }
+
+  function renderHome(target) {
+    setTitle("");
+    app.textContent = "";
+    app.appendChild(heroSec());
+    app.appendChild(aboutSec());
+    app.appendChild(worksSec());
+    app.appendChild(businessSec());
+    var el = target && document.getElementById(target);
+    if (el) el.scrollIntoView(); else window.scrollTo(0, 0);
+  }
+
+  /* ---------- 상세 ---------- */
 
   function copyLink(btn) {
     var url = location.href;
@@ -120,7 +171,7 @@
 
   function renderDetail(slug) {
     var r = REFS.filter(function (x) { return x.slug === slug; })[0];
-    if (!r) { location.hash = "#/"; return; }
+    if (!r) { location.hash = "#/works"; return; }
     setTitle(r.title);
     app.textContent = "";
 
@@ -136,7 +187,7 @@
     var share = h("button", { class: "btn", type: "button", onclick: function (e) { copyLink(e.currentTarget); } }, "링크 복사");
 
     app.appendChild(h("article", { class: "detail" },
-      h("a", { class: "back", href: "#/" }, "← 전체 보기"),
+      h("a", { class: "back", href: "#/works" }, "← 레퍼런스 전체 보기"),
       h("div", { class: "hd" },
         poster(r, true),
         h("div", {},
@@ -157,7 +208,7 @@
         list
       ),
       h("div", { class: "actions" },
-        h("a", { class: "btn primary", href: "#/" }, "다른 레퍼런스 보기"),
+        h("a", { class: "btn primary", href: "#/works" }, "다른 레퍼런스 보기"),
         share
       )
     ));
@@ -171,8 +222,11 @@
   }
 
   function route() {
-    var m = /^#\/r\/([\w-]+)/.exec(location.hash);
-    if (m) renderDetail(m[1]); else renderList();
+    var hash = location.hash;
+    var d = /^#\/r\/([\w-]+)/.exec(hash);
+    if (d) { renderDetail(d[1]); return; }
+    var s = /^#\/(about|works|business)$/.exec(hash);
+    renderHome(s ? s[1] : null);
   }
 
   document.getElementById("brand").textContent = SITE.name;
